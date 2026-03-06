@@ -2,101 +2,39 @@ name: 每日股票数据更新
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'  # UTC 8:00 = 北京时间16:00（A股收盘1小时后），仅周一到周五
-  workflow_dispatch:       # 手动触发按钮（测试用）
+    - cron: '0 8 * * 1-5'  # 北京时间16:00，仅周一到周五
+  workflow_dispatch:       # 手动触发
 
 jobs:
   update-stock-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 15    # 超时保护（避免无限运行）
+    timeout-minutes: 15
     steps:
-      # 步骤1：拉取仓库代码
-      - name: 拉取仓库代码
+      - name: 拉取代码
         uses: actions/checkout@v4
 
-      # 步骤2：设置Python环境（3.10稳定版）
-      - name: 配置Python 3.10环境
+      - name: 设置Python 3.10环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'      # 缓存依赖，加速后续运行
+          cache: 'pip'
 
-      # 步骤3：安装依赖（清华源加速 + 显示安装日志）
-      - name: 安装Python依赖包
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
-          # 清华源加速，显示详细安装日志
-          pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple -v
+          pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-      # 步骤4：检查是否为A股交易日（修复版）
-      - name: 检查当日是否为A股交易日
-        id: check_trading_day
-        run: |
-          python -c "
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-          import akshare as ak
-          import sys
-
-          # 强制设置时区为北京时间
-          tz = ZoneInfo('Asia/Shanghai')
-          today = datetime.now(tz).strftime('%Y%m%d')
-          print(f'【调试】当前北京时间：{today}')
-
-          # 核心逻辑：使用交易日历兜底，修复日期格式问题
-          is_trading_day = False
-          try:
-              # 获取交易日历
-              df = ak.tool_trade_date_hist_sina()
-              col_name = 'trade_date' if 'trade_date' in df.columns else '日期'
-              # 将交易日历中的日期格式转换为 'YYYYMMDD' 以匹配
-              df['formatted_date'] = df[col_name].str.replace('-', '')
-              print(f'【调试】交易日历列名：{col_name}，最近5条数据：\\n{df[["formatted_date"]].tail(5)}')
-              is_trading_day = today in df['formatted_date'].values
-          except Exception as e:
-              print(f'【调试】交易日历查询失败：{e}，默认视为交易日')
-              is_trading_day = True
-
-          # 修复f-string引号问题，使用单引号包裹中文
-          print(f'【调试】最终判断：{today} {"是" if is_trading_day else "不是"}A股交易日')
-          sys.exit(0 if is_trading_day else 1)
-          "
-        continue-on-error: true  # 接口异常时不终止整体流程
-
-      # 步骤5：运行股票数据更新脚本（仅交易日执行）
-      - name: 执行股票数据更新脚本
-        if: steps.check_trading_day.outcome == 'success'
+      - name: 运行更新脚本
         env:
-          # 从GitHub Secrets读取敏感信息
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
-        run: |
-          echo "开始执行数据更新脚本..."
-          python stock_data_update.py
-          echo "脚本执行完成！"
+        run: python stock_data_update.py
 
-      # 步骤6：提交更新后的Excel表格到仓库（仅交易日执行）
-      - name: 提交更新后的表格到GitHub
-        if: steps.check_trading_day.outcome == 'success'
+      - name: 提交更新后的表格
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          # 检查Excel文件是否存在
-          if [ -f "stock_data.xlsx" ]; then
-              git add stock_data.xlsx
-              # 避免无变更时提交失败
-              git commit -m "Update stock data $(TZ='Asia/Shanghai' date +'%Y-%m-%d')" || echo "无数据变更，无需提交"
-              git push
-              echo "表格已提交到仓库！"
-          else
-              echo "警告：未生成stock_data.xlsx文件！"
-          fi
-
-      # 步骤7：输出运行结果（调试用）
-      - name: 输出最终运行状态
-        if: always()  # 无论前面步骤是否成功，都执行
-        run: |
-          echo "工作流运行完成！"
-          echo "交易日检查状态：${{ steps.check_trading_day.outcome }}"
-          echo "是否执行了数据更新：${{ steps.check_trading_day.outcome == 'success' && '是' || '否' }}"
+          git add stock_data.xlsx
+          git commit -m "Update stock data $(TZ='Asia/Shanghai' date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push
