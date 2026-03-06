@@ -1,4 +1,4 @@
-akshare==1.10.48
+akshare>=1.18.0
 pandas==2.2.2
 openpyxl==3.1.2
 python-dotenv==1.0.1
