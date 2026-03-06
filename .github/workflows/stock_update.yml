@@ -13,6 +13,12 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
+      - name: 查看当前目录文件（调试用）
+        run: |
+          echo "当前工作目录: $(pwd)"
+          echo "目录下的文件:"
+          ls -la
+
       - name: 设置Python 3.10环境
         uses: actions/setup-python@v5
         with:
@@ -29,7 +35,15 @@ jobs:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
-        run: python stock_data_update.py
+        run: |
+          # 先检查文件是否存在
+          if [ -f "stock_data_update.py" ]; then
+            echo "找到脚本文件，开始执行..."
+            python stock_data_update.py
+          else
+            echo "错误：未找到stock_data_update.py文件！"
+            exit 1
+          fi
 
       - name: 提交更新后的表格
         run: |
