@@ -21,7 +21,7 @@ CONFIG = {
     "email": {
         "sender": os.getenv("EMAIL_SENDER"),  # 发件人邮箱（从环境变量获取）
         "password": os.getenv("EMAIL_PASSWORD"),  # 邮箱授权码
-        "receiver": os.getenv("EMAIL_RECEIVER"),  # 收件人邮箱
+        "receiver": os.getenv("EMAIL_RECEIVER", "").split(",")
         "smtp_server": "smtp.qq.com",  # QQ邮箱示例，其他邮箱需修改
         "smtp_port": 465
     }
