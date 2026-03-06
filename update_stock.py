@@ -134,7 +134,7 @@ def send_email_with_attachment(file_path):
     # 构建邮件
     msg = MIMEMultipart()
     msg["From"] = CONFIG["email"]["sender"]
-    msg["To"] = CONFIG["email"]["receiver"]
+    msg["To"] = ", ".join(CONFIG["email"]["receiver"])
     msg["Subject"] = f"股票数据每日更新 - {datetime.now().strftime('%Y-%m-%d')}"
     
     # 邮件正文
