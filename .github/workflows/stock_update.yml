@@ -17,25 +17,30 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 安装依赖
+      - name: 安装依赖（国内镜像加速）
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-      - name: 检查是否为A股交易日
+      - name: 检查是否为A股交易日（北京时间）
         id: check_trading_day
         run: |
-          TODAY=$(TZ='Asia/Shanghai' date +%Y%m%d)
           python -c "
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
           import akshare as ak
           import sys
+          # 获取北京时间的今日日期
+          today = datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%Y%m%d')
+          # 获取A股交易日历
           df = ak.tool_trade_date_hist_sina()
-          is_trading_day = TODAY in df['trade_date'].values
+          # 检查今天是否在交易日列表中
+          is_trading_day = today in df['trade_date'].values
           sys.exit(0 if is_trading_day else 1)
           "
         continue-on-error: true
 
-      - name: 运行更新脚本
+      - name: 运行更新脚本（仅交易日执行）
         if: steps.check_trading_day.outcome == 'success'
         env:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
@@ -43,7 +48,7 @@ jobs:
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: python stock_data_update.py
 
-      - name: 提交更新后的表格
+      - name: 提交更新后的表格（仅交易日执行）
         if: steps.check_trading_day.outcome == 'success'
         run: |
           git config --global user.name "GitHub Actions"
