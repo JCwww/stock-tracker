@@ -1,54 +1,79 @@
 name: 每日股票数据更新
 
+# 触发规则：交易日北京时间16:00自动运行 + 手动触发
 on:
   schedule:
-    - cron: '0 8 * * 1-5'  # 北京时间16:00，仅周一到周五
-  workflow_dispatch:       # 手动触发
+    - cron: '0 8 * * 1-5'  # UTC 8:00 = 北京时间16:00（A股收盘1小时后），仅周一到周五
+  workflow_dispatch:       # 手动触发按钮（测试/应急用）
 
 jobs:
   update-stock-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 15    # 超时保护，避免无限运行
     steps:
-      - name: 拉取代码
+      # 步骤1：拉取仓库代码（确保能拿到update_stock.py）
+      - name: 拉取仓库代码
         uses: actions/checkout@v4
 
-      - name: 查看当前目录文件（调试用）
+      # 步骤2：调试 - 查看当前目录文件（确认文件存在）
+      - name: 查看目录文件（调试用）
         run: |
-          echo "当前工作目录: $(pwd)"
-          echo "目录下的文件:"
+          echo "当前工作目录：$(pwd)"
+          echo "目录下所有文件："
           ls -la
 
+      # 步骤3：配置Python 3.10环境（稳定版）
       - name: 设置Python 3.10环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
+          cache: 'pip'      # 缓存依赖，加速后续运行
 
-      - name: 安装依赖
+      # 步骤4：安装依赖（清华源加速，解决海外下载慢）
+      - name: 安装Python依赖包
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-      - name: 运行更新脚本
+      # 步骤5：运行股票更新脚本（匹配你的实际文件名update_stock.py）
+      - name: 执行股票数据更新脚本
         env:
+          # 从GitHub Secrets读取敏感信息（邮箱配置）
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: |
-          # 先检查文件是否存在
-          if [ -f "stock_data_update.py" ]; then
-            echo "找到脚本文件，开始执行..."
-            python stock_data_update.py
+          # 先检查脚本文件是否存在（防错）
+          if [ -f "update_stock.py" ]; then
+            echo "✅ 找到update_stock.py，开始执行..."
+            python update_stock.py
+            echo "✅ 脚本执行完成！"
           else
-            echo "错误：未找到stock_data_update.py文件！"
+            echo "❌ 错误：未找到update_stock.py文件！"
             exit 1
           fi
 
+      # 步骤6：提交更新后的Excel表格到仓库
       - name: 提交更新后的表格
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add stock_data.xlsx
-          git commit -m "Update stock data $(TZ='Asia/Shanghai' date +'%Y-%m-%d')" || echo "No changes to commit"
-          git push
+          # 检查Excel文件是否生成
+          if [ -f "stock_data.xlsx" ]; then
+              git add stock_data.xlsx
+              # 无变更时不报错
+              git commit -m "Update stock data $(TZ='Asia/Shanghai' date +'%Y-%m-%d')" || echo "ℹ️ 无数据变更，无需提交"
+              git push
+              echo "✅ 表格已提交到仓库！"
+          else
+              echo "⚠️ 警告：未生成stock_data.xlsx文件（非错误，可能今日无数据）"
+          fi
+
+      # 步骤7：输出最终运行状态（方便排查）
+      - name: 输出运行总结
+        if: always()  # 无论前面步骤是否成功，都执行
+        run: |
+          echo "==================== 运行总结 ===================="
+          echo "工作流状态：${{ job.status }}"
+          echo "是否执行脚本：$(if [ -f "update_stock.py" ]; then echo "是"; else echo "否"; fi)"
+          echo "是否生成Excel：$(if [ -f "stock_data.xlsx" ]; then echo "是"; else echo "否"; fi)"
