@@ -1,0 +1,5 @@
+akshare==1.10.48
+pandas==2.2.2
+openpyxl==3.1.2
+python-dotenv==1.0.1
+smtplib2==0.1.1
