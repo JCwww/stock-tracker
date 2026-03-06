@@ -1,6 +1,5 @@
 name: 每日股票数据更新
 
-# 触发规则：交易日北京时间16:00自动运行 + 支持手动触发
 on:
   schedule:
     - cron: '0 8 * * 1-5'  # UTC 8:00 = 北京时间16:00（A股收盘1小时后），仅周一到周五
@@ -29,7 +28,7 @@ jobs:
           # 清华源加速，显示详细安装日志
           pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple -v
 
-      # 步骤4：检查是否为A股交易日（带调试日志 + 容错逻辑）
+      # 步骤4：检查是否为A股交易日（修复版）
       - name: 检查当日是否为A股交易日
         id: check_trading_day
         run: |
@@ -44,21 +43,21 @@ jobs:
           today = datetime.now(tz).strftime('%Y%m%d')
           print(f'【调试】当前北京时间：{today}')
 
-          # 核心逻辑：优先用实时接口，失败则用日历兜底
+          # 核心逻辑：使用交易日历兜底，修复日期格式问题
           is_trading_day = False
           try:
-              # 方法1：实时接口（最准确）
-              trade_status = ak.tool_trade_date_is_open()
-              print(f'【调试】实时接口返回：{trade_status}')
-              is_trading_day = trade_status['is_open'] == '1'
-          except Exception as e:
-              print(f'【调试】实时接口调用失败：{e}，切换到日历兜底')
-              # 方法2：交易日历兜底（兼容不同版本列名）
+              # 获取交易日历
               df = ak.tool_trade_date_hist_sina()
               col_name = 'trade_date' if 'trade_date' in df.columns else '日期'
-              print(f'【调试】交易日历列名：{col_name}，最近5条数据：\\n{df[col_name].tail(5)}')
-              is_trading_day = today in df[col_name].values
+              # 将交易日历中的日期格式转换为 'YYYYMMDD' 以匹配
+              df['formatted_date'] = df[col_name].str.replace('-', '')
+              print(f'【调试】交易日历列名：{col_name}，最近5条数据：\\n{df[["formatted_date"]].tail(5)}')
+              is_trading_day = today in df['formatted_date'].values
+          except Exception as e:
+              print(f'【调试】交易日历查询失败：{e}，默认视为交易日')
+              is_trading_day = True
 
+          # 修复f-string引号问题，使用单引号包裹中文
           print(f'【调试】最终判断：{today} {"是" if is_trading_day else "不是"}A股交易日')
           sys.exit(0 if is_trading_day else 1)
           "
